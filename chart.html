@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>User Sugar Intake Chart</title>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <style>
+      #chart-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+      }
+      #stacked_chart_div, #pie_chart_div {
+        margin: 0 auto;
+        text-align: center;
+      }
+      #stacked_chart_div {
+        width: 800px;
+        height: 500px;
+      }
+      #pie_chart_div {
+        width: 500px;
+        height: 400px;
+      }
+    </style>
+    <script>
+      google.charts.load('current', { packages: ['corechart'] });
+
+      function getQueryParam(param) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(param);
+      }
+
+      function drawCharts(userData) {
+        // 準備水平長條圖資料
+        const dates = [...new Set(userData.map(row => row.Date))].sort();
+        const categories = ['甜點', '鹹點', '飲料', '原型食物'];
+        const userDSIG = userData.length > 0 ? parseFloat(userData[0].UserDSIG) : 0;
+
+        // 水平長條圖資料表
+        const chartData = new google.visualization.DataTable();
+        chartData.addColumn('string', 'Date');
+        chartData.addColumn('number', 'Sugar (grams)');
+        chartData.addColumn({ type: 'string', role: 'style' }); // 條件式顏色
+        chartData.addColumn({ type: 'string', role: 'annotation' }); // 總和註解
+        chartData.addColumn('number', 'User DSIG'); // 用於繪製虛線
+        chartData.addColumn({ type: 'string', role: 'style' }); // DSIG 線樣式
+
+        const sugarByDate = dates.map(date => {
+          const totalSugar = userData
+            .filter(d => d.Date === date)
+            .reduce((sum, d) => sum + parseFloat(d.Sugar || 0), 0);
+          const color = totalSugar <= userDSIG ? '#2894FF' : '#FFA042';
+          return [date, totalSugar, color, totalSugar.toFixed(1), userDSIG, 'stroke-color: red; stroke-width: 2; stroke-dasharray: 5,5'];
+        });
+
+        chartData.addRows(sugarByDate);
+
+        // 水平長條圖選項
+        const chartOptions = {
+          title: '每日含糖量攝取（總量）',
+          titleTextStyle: {
+            fontSize: 18,
+            bold: true
+          },
+          hAxis: { 
+            title: 'Sugar (grams)',
+            titleTextStyle: { fontSize: 14 },
+            viewWindow: { min: 0, max: Math.max(userDSIG + 10, ...sugarByDate.map(d => d[1] + 10)) },
+            gridlines: {
+              count: -1,
+              color: '#ddd'
+            },
+            ticks: [
+              { v: 0, f: '0' },
+              { v: userDSIG, f: '每日建議糖攝取上限 (' + userDSIG + 'g)'}
+            ]
+          },
+          vAxis: { 
+            title: 'Date',
+            titleTextStyle: { fontSize: 14 }
+          },
+          legend: 'none',
+          width: 800,
+          height: 500,
+          annotations: {
+            alwaysOutside: true,
+            textStyle: {
+              fontSize: 12,
+              color: '#000'
+            }
+          },
+          series: {
+            1: { type: 'line', lineDashStyle: [5, 5], lineWidth: 2, visibleInLegend: false } // DSIG 線為虛線
+          }
+        };
+
+        // 繪製水平長條圖
+        const chart = new google.visualization.BarChart(document.getElementById('stacked_chart_div'));
+        chart.draw(chartData, chartOptions);
+
+        // 準備圓餅圖資料
+        const categoryCounts = categories.map(category => {
+          const sugarSum = userData
+            .filter(d => d.Category === category)
+            .reduce((sum, d) => sum + parseFloat(d.Sugar || 0), 0);
+          return [category, sugarSum];
+        });
+
+        const pieData = new google.visualization.DataTable();
+        pieData.addColumn('string', 'Category');
+        pieData.addColumn('number', 'Sugar (grams)');
+        pieData.addRows(categoryCounts);
+
+        // 圓餅圖選項
+        const pieOptions = {
+          title: '含糖量按類別占比',
+          titleTextStyle: {
+            fontSize: 18,
+            bold: true
+          },
+          colors: ['#FF7575', '#81C0C0', '#FFD700', '#90EE90'],
+          width: 500,
+          height: 400
+        };
+
+        // 繪製圓餅圖
+        const pieChart = new google.visualization.PieChart(document.getElementById('pie_chart_div'));
+        pieChart.draw(pieData, pieOptions);
+      }
+
+      async function fetchData(userId) {
+        const sheetId = '1SotkHkUXV3UgwcXJpT6Z2-33ixnxCdj9QYClPSt1K2o';
+        const sheetName = 'Template';
+        const query = encodeURIComponent('SELECT A, B, C, D, E, F, G, H, I');
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?sheet=${sheetName}&tq=${query}`;
+
+        const response = await fetch(url);
+        const text = await response.text();
+        const json = JSON.parse(text.substr(47).slice(0, -2));
+
+        const rows = json.table.rows.map(r => ({
+          UserID: r.c[0]?.v,
+          Date: r.c[1]?.f || r.c[1]?.v,
+          Time: r.c[2]?.v,
+          SnackName: r.c[3]?.v,
+          Category: r.c[4]?.v,
+          Size: r.c[5]?.v,
+          Sugar: r.c[6]?.v,
+          UploadMethod: r.c[7]?.v,
+          UserDSIG: r.c[8]?.v
+        }));
+
+        const filteredData = rows.filter(r => r.UserID === userId);
+        if (filteredData.length === 0) {
+          document.getElementById('stacked_chart_div').innerHTML = `<p>No data found for ${userId}</p>`;
+          document.getElementById('pie_chart_div').innerHTML = '';
+        } else {
+          drawCharts(filteredData);
+        }
+      }
+
+      google.charts.setOnLoadCallback(() => {
+        const userId = getQueryParam('userid');
+        if (userId) {
+          fetchData(userId);
+        } else {
+          document.getElementById('stacked_chart_div').innerHTML = '<p>No user ID provided in URL</p>';
+          document.getElementById('pie_chart_div').innerHTML = '';
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <h2>User Sugar Intake Chart</h2>
+    <div id="chart-container">
+      <div id="stacked_chart_div"></div>
+      <div id="pie_chart_div"></div>
+    </div>
+  </body>
+</html>
