@@ -2,27 +2,17 @@
 <html>
   <head>
     <meta charset="UTF-8">
-    <title>User Sugar Intake Chart</title>
+    <title>User Sugar Intake Chart (Group A)</title>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <style>
       #chart-container {
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
         width: 100%;
       }
       #stacked_chart_div, #pie_chart_div {
         margin: 0 auto;
-        text-align: center;
-      }
-      #stacked_chart_div {
-        width: 800px;
-        height: 500px;
-      }
-      #pie_chart_div {
-        width: 500px;
-        height: 400px;
       }
     </style>
     <script>
@@ -34,19 +24,21 @@
       }
 
       function drawCharts(userData) {
-        // 準備水平長條圖資料
-        const dates = [...new Set(userData.map(row => row.Date))].sort();
+        const dates = [...new Set(userData.map(row => row.Date))].sort((a, b) => {
+          return new Date(a) - new Date(b);
+        });
+
         const categories = ['甜點', '鹹點', '飲料', '原型食物'];
         const userDSIG = userData.length > 0 ? parseFloat(userData[0].UserDSIG) : 0;
 
-        // 水平長條圖資料表
+        // 垂直長條圖資料
         const chartData = new google.visualization.DataTable();
         chartData.addColumn('string', 'Date');
         chartData.addColumn('number', 'Sugar (grams)');
-        chartData.addColumn({ type: 'string', role: 'style' }); // 條件式顏色
-        chartData.addColumn({ type: 'string', role: 'annotation' }); // 總和註解
-        chartData.addColumn('number', 'User DSIG'); // 用於繪製虛線
-        chartData.addColumn({ type: 'string', role: 'style' }); // DSIG 線樣式
+        chartData.addColumn({ type: 'string', role: 'style' });
+        chartData.addColumn({ type: 'string', role: 'annotation' });
+        chartData.addColumn('number', 'User DSIG');
+        chartData.addColumn({ type: 'string', role: 'style' });
 
         const sugarByDate = dates.map(date => {
           const totalSugar = userData
@@ -58,50 +50,32 @@
 
         chartData.addRows(sugarByDate);
 
-        // 水平長條圖選項
         const chartOptions = {
           title: '每日含糖量攝取（總量）',
-          titleTextStyle: {
-            fontSize: 18,
-            bold: true
-          },
-          hAxis: { 
+          vAxis: { 
             title: 'Sugar (grams)',
-            titleTextStyle: { fontSize: 14 },
-            viewWindow: { min: 0, max: Math.max(userDSIG + 10, ...sugarByDate.map(d => d[1] + 10)) },
-            gridlines: {
-              count: -1,
-              color: '#ddd'
-            },
+            viewWindow: { min: 0 },
             ticks: [
               { v: 0, f: '0' },
-              { v: userDSIG, f: '每日建議糖攝取上限 (' + userDSIG + 'g)'}
+              { v: userDSIG, f: '每日建議糖攝取上限 (' + userDSIG + 'g)', textStyle: { color: 'red' } }
             ]
           },
-          vAxis: { 
-            title: 'Date',
-            titleTextStyle: { fontSize: 14 }
+          hAxis: { 
+            title: 'Date' 
           },
           legend: 'none',
           width: 800,
           height: 500,
-          annotations: {
-            alwaysOutside: true,
-            textStyle: {
-              fontSize: 12,
-              color: '#000'
-            }
-          },
           series: {
-            1: { type: 'line', lineDashStyle: [5, 5], lineWidth: 2, visibleInLegend: false } // DSIG 線為虛線
+            1: { type: 'line', lineDashStyle: [5, 5], lineWidth: 2, visibleInLegend: false }
           }
         };
 
-        // 繪製水平長條圖
-        const chart = new google.visualization.BarChart(document.getElementById('stacked_chart_div'));
+        // 改用 ColumnChart（垂直長條圖）
+        const chart = new google.visualization.ColumnChart(document.getElementById('stacked_chart_div'));
         chart.draw(chartData, chartOptions);
 
-        // 準備圓餅圖資料
+        // 圓餅圖資料
         const categoryCounts = categories.map(category => {
           const sugarSum = userData
             .filter(d => d.Category === category)
@@ -114,28 +88,20 @@
         pieData.addColumn('number', 'Sugar (grams)');
         pieData.addRows(categoryCounts);
 
-        // 圓餅圖選項
         const pieOptions = {
           title: '含糖量按類別占比',
-          titleTextStyle: {
-            fontSize: 18,
-            bold: true
-          },
           colors: ['#FF7575', '#81C0C0', '#FFD700', '#90EE90'],
           width: 500,
           height: 400
         };
 
-        // 繪製圓餅圖
         const pieChart = new google.visualization.PieChart(document.getElementById('pie_chart_div'));
         pieChart.draw(pieData, pieOptions);
       }
 
       async function fetchData(userId) {
-        const sheetId = '1SotkHkUXV3UgwcXJpT6Z2-33ixnxCdj9QYClPSt1K2o';
-        const sheetName = 'Template';
-        const query = encodeURIComponent('SELECT A, B, C, D, E, F, G, H, I');
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?sheet=${sheetName}&tq=${query}`;
+        const sheetId = '1trLegi8dXVFlL0nlf1EO3iNtJuKna1nmjulnlS7Aq0Q'; // 檔案 A 的 sheetId
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?sheet=Template&tq=${encodeURIComponent('SELECT A, B, C, D, E, F, G, H, I')}`;
 
         const response = await fetch(url);
         const text = await response.text();
@@ -174,7 +140,7 @@
     </script>
   </head>
   <body>
-    <h2>User Sugar Intake Chart</h2>
+    <h2>User Sugar Intake Chart (Group A)</h2>
     <div id="chart-container">
       <div id="stacked_chart_div"></div>
       <div id="pie_chart_div"></div>
